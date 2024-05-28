@@ -29,6 +29,7 @@ import (
 	"github.com/ollama/ollama/envconfig"
 	"github.com/ollama/ollama/gpu"
 	"github.com/ollama/ollama/llm"
+	"github.com/ollama/ollama/middlewares/auth"
 	"github.com/ollama/ollama/openai"
 	"github.com/ollama/ollama/parser"
 	"github.com/ollama/ollama/types/errtypes"
@@ -983,10 +984,16 @@ func (s *Server) GenerateRoutes() http.Handler {
 	config.AllowHeaders = []string{"Authorization", "Content-Type", "User-Agent", "Accept", "X-Requested-With"}
 	config.AllowOrigins = envconfig.AllowOrigins
 
+	a, err := auth.NewAuthenticator()
+	if err != nil {
+		slog.Error("unable to initialize authenticator", "error", err)
+	}
+
 	r := gin.Default()
 	r.Use(
 		cors.New(config),
 		allowedHostsMiddleware(s.addr),
+		a.RequireAdmin(),
 	)
 
 	r.POST("/api/pull", s.PullModelHandler)
@@ -1001,6 +1008,10 @@ func (s *Server) GenerateRoutes() http.Handler {
 	r.POST("/api/blobs/:digest", s.CreateBlobHandler)
 	r.HEAD("/api/blobs/:digest", s.HeadBlobHandler)
 	r.GET("/api/ps", s.ProcessHandler)
+
+	// Authentication endpoints
+	authGroup := r.Group("/api/auth")
+	a.RegisterHandlers(authGroup)
 
 	// Compatibility endpoints
 	r.POST("/v1/chat/completions", openai.Middleware(), s.ChatHandler)
