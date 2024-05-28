@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	API_KEY_FILE   = "api_keys.txt"
-	API_KEY_HEADER = "HACTAR_API_KEY"
+	API_KEY_FILE = "api_keys.txt"
 )
 
 type Role string
@@ -35,36 +37,55 @@ func NewAuthenticator() (*Authenticator, error) {
 	}, nil
 }
 
-func (a *Authenticator) RequireAuth(role Role) gin.HandlerFunc {
+func (a *Authenticator) Authenticate(c *gin.Context) {
+	var err error
+	a.UserApiKeys, err = LoadAPIKeys(API_KEY_FILE)
+	if err != nil {
+		c.AbortWithStatusJSON(500, gin.H{"error": "Internal server error"})
+		return
+	}
+
+	authHeader := c.GetHeader("Authorization")
+
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	apiKey := strings.TrimPrefix(authHeader, "Bearer ")
+
+	user, ok := a.UserApiKeys[apiKey]
+	if !ok {
+		c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+	c.Set("email", user.Email)
+	c.Set("role", user.Role)
+	c.Set("authenticator", a)
+	fmt.Println("role", user.Role)
+
+	c.Next()
+}
+
+func GetAuthenticator(c *gin.Context) *Authenticator {
+	return c.MustGet("authenticator").(*Authenticator)
+}
+
+func RequireRole(required Role) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var err error
-		a.UserApiKeys, err = LoadAPIKeys(API_KEY_FILE)
-		if err != nil {
-			c.AbortWithStatusJSON(500, gin.H{"error": "Internal server error"})
+		role := GetRole(c)
+
+		if role != Admin && role != required {
+			c.AbortWithStatusJSON(403, gin.H{"error": "Forbidden"})
 			return
 		}
-
-		apiKey := c.GetHeader(API_KEY_HEADER)
-
-		user, ok := a.UserApiKeys[apiKey]
-		if !ok || user.Role != role {
-			c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
-			return
-		}
-		c.Set("user", user)
-
-		c.Next()
 	}
 }
 
-func (a *Authenticator) RequireAdmin() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		a.RequireAuth(Admin)(c)
-	}
+func RequireAdmin(c *gin.Context) {
+	RequireRole(Admin)(c)
 }
 
-func (a *Authenticator) RequireUser() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		a.RequireAuth(RegularUser)(c)
-	}
+func RequireUser(c *gin.Context) {
+	RequireRole(RegularUser)(c)
 }

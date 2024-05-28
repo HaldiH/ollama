@@ -4,6 +4,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func GetRole(c *gin.Context) Role {
+	role, _ := c.Get("role")
+	return role.(Role)
+}
+
 func (a *Authenticator) RegisterHandler(c *gin.Context) {
 	var user User
 	if err := c.BindJSON(&user); err != nil {
@@ -21,6 +26,6 @@ func (a *Authenticator) RegisterHandler(c *gin.Context) {
 }
 
 func (a *Authenticator) RegisterHandlers(g *gin.RouterGroup) {
-	g.Use(a.RequireAdmin())
+	g.Use(RequireAdmin)
 	g.POST("/register", a.RegisterHandler)
 }

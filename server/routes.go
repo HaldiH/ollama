@@ -78,6 +78,7 @@ func isSupportedImageType(image []byte) bool {
 }
 
 func (s *Server) GenerateHandler(c *gin.Context) {
+	auth.RequireUser(c)
 
 	checkpointStart := time.Now()
 	var req api.GenerateRequest
@@ -342,6 +343,8 @@ func getDefaultSessionDuration() time.Duration {
 }
 
 func (s *Server) EmbeddingsHandler(c *gin.Context) {
+	auth.RequireUser(c)
+
 	var req api.EmbeddingRequest
 	err := c.ShouldBindJSON(&req)
 	switch {
@@ -411,6 +414,8 @@ func (s *Server) EmbeddingsHandler(c *gin.Context) {
 }
 
 func (s *Server) PullModelHandler(c *gin.Context) {
+	auth.RequireAdmin(c)
+
 	var req api.PullRequest
 	err := c.ShouldBindJSON(&req)
 	switch {
@@ -460,6 +465,8 @@ func (s *Server) PullModelHandler(c *gin.Context) {
 }
 
 func (s *Server) PushModelHandler(c *gin.Context) {
+	auth.RequireAdmin(c)
+
 	var req api.PushRequest
 	err := c.ShouldBindJSON(&req)
 	switch {
@@ -509,6 +516,8 @@ func (s *Server) PushModelHandler(c *gin.Context) {
 }
 
 func (s *Server) CreateModelHandler(c *gin.Context) {
+	auth.RequireAdmin(c)
+
 	var req api.CreateRequest
 	if err := c.ShouldBindJSON(&req); errors.Is(err, io.EOF) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing request body"})
@@ -576,6 +585,8 @@ func (s *Server) CreateModelHandler(c *gin.Context) {
 }
 
 func (s *Server) DeleteModelHandler(c *gin.Context) {
+	auth.RequireAdmin(c)
+
 	var req api.DeleteRequest
 	err := c.ShouldBindJSON(&req)
 	switch {
@@ -621,6 +632,8 @@ func (s *Server) DeleteModelHandler(c *gin.Context) {
 }
 
 func (s *Server) ShowModelHandler(c *gin.Context) {
+	auth.RequireUser(c)
+
 	var req api.ShowRequest
 	err := c.ShouldBindJSON(&req)
 	switch {
@@ -798,6 +811,8 @@ func (s *Server) ListModelsHandler(c *gin.Context) {
 }
 
 func (s *Server) CopyModelHandler(c *gin.Context) {
+	auth.RequireAdmin(c)
+
 	var r api.CopyRequest
 	if err := c.ShouldBindJSON(&r); errors.Is(err, io.EOF) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "missing request body"})
@@ -827,6 +842,8 @@ func (s *Server) CopyModelHandler(c *gin.Context) {
 }
 
 func (s *Server) HeadBlobHandler(c *gin.Context) {
+	auth.RequireUser(c)
+
 	path, err := GetBlobsPath(c.Param("digest"))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -842,6 +859,8 @@ func (s *Server) HeadBlobHandler(c *gin.Context) {
 }
 
 func (s *Server) CreateBlobHandler(c *gin.Context) {
+	auth.RequireAdmin(c)
+
 	if ib, ok := intermediateBlobs[c.Param("digest")]; ok {
 		p, err := GetBlobsPath(ib)
 		if err != nil {
@@ -993,7 +1012,7 @@ func (s *Server) GenerateRoutes() http.Handler {
 	r.Use(
 		cors.New(config),
 		allowedHostsMiddleware(s.addr),
-		a.RequireAdmin(),
+		a.Authenticate,
 	)
 
 	r.POST("/api/pull", s.PullModelHandler)
@@ -1171,6 +1190,8 @@ func streamResponse(c *gin.Context, ch chan any) {
 }
 
 func (s *Server) ProcessHandler(c *gin.Context) {
+	auth.RequireUser(c)
+
 	models := []api.ModelResponse{}
 
 	for _, v := range s.sched.loaded {
@@ -1221,6 +1242,8 @@ func chatPrompt(ctx context.Context, runner *runnerRef, template string, message
 }
 
 func (s *Server) ChatHandler(c *gin.Context) {
+	auth.RequireUser(c)
+
 	checkpointStart := time.Now()
 
 	var req api.ChatRequest
